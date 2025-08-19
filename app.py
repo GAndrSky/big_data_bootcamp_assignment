@@ -153,6 +153,34 @@ with tabs[0]:
                     st.error(f"Failed to add team: {e}")
     st.dataframe(get_teams_df(), use_container_width=True)
 
+    teams_df_now = get_teams_df()
+    if teams_df_now.empty:
+        st.info("No teams yet.")
+    else:
+        team_map_del = {f"[#{row['TEAM_ID']}] {row['TEAM_NAME']}": int(row["TEAM_ID"])
+                        for _, row in teams_df_now.iterrows()}
+        sel_team_del = st.selectbox("Select a team to delete", list(team_map_del.keys()))
+        if st.button("🗑️ Delete selected team"):
+            team_id = team_map_del[sel_team_del]
+            has_cars = run("SELECT COUNT(*) AS CNT FROM CARS WHERE TEAM_ID = %s",
+                           [team_id], fetch="all")
+            has_results = run("SELECT COUNT(*) AS CNT FROM RACE_RESULTS WHERE TEAM_ID = %s",
+                              [team_id], fetch="all")
+            cnt_cars = int(has_cars.iloc[0]["CNT"]) if not has_cars.empty else 0
+            cnt_res  = int(has_results.iloc[0]["CNT"]) if not has_results.empty else 0
+
+            if cnt_res > 0:
+                st.warning("Cannot delete: this team has race results.")
+            elif cnt_cars > 0:
+                st.warning("Cannot delete: there are cars assigned to this team. Unassign or delete them first.")
+            else:
+                try:
+                    run("DELETE FROM TEAMS WHERE TEAM_ID = %s", [team_id])
+                    st.success("Team deleted.")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Delete failed: {e}")
+
 # CARS
 with tabs[1]:
     st.subheader("Manage Cars")
@@ -180,7 +208,7 @@ with tabs[1]:
                 st.error(f"Failed to add car: {e}")
     st.dataframe(get_cars_df(True), use_container_width=True)
 
-     cars_df_now = get_cars_df(True)
+    cars_df_now = get_cars_df(True)
     if cars_df_now.empty:
         st.info("No cars yet.")
     else:
