@@ -180,6 +180,28 @@ with tabs[1]:
                 st.error(f"Failed to add car: {e}")
     st.dataframe(get_cars_df(True), use_container_width=True)
 
+     cars_df_now = get_cars_df(True)
+    if cars_df_now.empty:
+        st.info("No cars yet.")
+    else:
+        car_map_del = {f"[#{row['CAR_ID']}] {row['CAR_NAME']}": int(row["CAR_ID"])
+                       for _, row in cars_df_now.iterrows()}
+        sel_car_del = st.selectbox("Select a car to delete", list(car_map_del.keys()))
+        if st.button("🗑️ Delete selected car"):
+            car_id = car_map_del[sel_car_del]
+            used = run("SELECT COUNT(*) AS CNT FROM RACE_RESULTS WHERE CAR_ID = %s",
+                       [car_id], fetch="all")
+            cnt = int(used.iloc[0]["CNT"]) if not used.empty else 0
+            if cnt > 0:
+                st.warning("Cannot delete: this car appears in race results.")
+            else:
+                try:
+                    run("DELETE FROM CARS WHERE CAR_ID = %s", [car_id])
+                    st.success("Car deleted.")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Delete failed: {e}")
+
 
 with tabs[2]:
     st.subheader("Assign Car to Team")
