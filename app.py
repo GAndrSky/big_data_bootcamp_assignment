@@ -10,18 +10,43 @@ st.set_page_config(page_title="Rally Racing Manager", page_icon="🏁", layout="
 
 @st.cache_resource
 def get_connection():
-    cfg = st.secrets["snowflake"]
-    cnx = snowflake.connector.connect(
-        account=cfg["account"],
-        user=cfg["user"],
-        password=cfg["password"],
-        warehouse=cfg["warehouse"],
-        role=cfg["role"],
-    )
+    cfg = st.secrets.get("snowflake", {})
+    if not cfg:
+        st.error("Missing [snowflake] secrets in Settings → Secrets")
+        st.stop()
+
+    conn_args = {
+        "user": cfg.get("user"),
+        "password": cfg.get("password"),
+        "warehouse": cfg.get("warehouse"),
+        "role": cfg.get("role"),
+        "login_timeout": 25,
+        "insecure_mode": True, 
+    }
+
+    if cfg.get("host"):
+        conn_args["host"] = cfg["host"]
+    elif cfg.get("account"):
+        conn_args["account"] = cfg["account"]
+    else:
+        st.error("Add either 'host' or 'account' to [snowflake] secrets")
+        st.stop()
+
+    try:
+        cnx = snowflake.connector.connect(**conn_args)
     
-    cnx.cursor().execute(f"USE DATABASE {cfg.get('database','BOOTCAMP_RALLY')}")
-    cnx.cursor().execute(f"USE SCHEMA {cfg.get('schema','CORE')}")
-    return cnx
+        db = cfg.get("database", "BOOTCAMP_RALLY")
+        sch = cfg.get("schema", "CORE")
+        c = cnx.cursor()
+        c.execute(f"USE DATABASE {db}")
+        c.execute(f"USE SCHEMA {sch}")
+        c.close()
+        return cnx
+    except Exception as e:
+        st.error("Snowflake connection failed. Check host/account, user, password, and network policy.")
+        st.exception(e)
+        st.stop()
+
 
 def run(sql: str, params=None, fetch: str | None = None):
     """Выполнить SQL; fetch='all' вернёт DataFrame."""
